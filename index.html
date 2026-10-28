@@ -52,21 +52,22 @@
       background: rgba(19, 27, 46, 0.94);
       backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--panel-border);
-      padding: 10px 14px;
+      padding: 8px 10px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
       z-index: 30;
       flex-shrink: 0;
+      flex-wrap: wrap;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       font-weight: 700;
-      font-size: 15px;
+      font-size: 14px;
       color: var(--accent);
       white-space: nowrap;
     }
@@ -74,9 +75,9 @@
     .status-pill {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      padding: 4px 10px;
+      gap: 5px;
+      font-size: 11px;
+      padding: 3px 8px;
       border-radius: 999px;
       background: #1e293b;
       color: #cbd5e1;
@@ -93,8 +94,8 @@
       border: 1px solid rgba(239, 68, 68, 0.5);
     }
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: currentColor;
     }
@@ -110,23 +111,24 @@
     .top-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
-      flex-wrap: nowrap;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-left: auto;
     }
 
     button {
       background: #1e293b;
       color: var(--text);
       border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 8px 12px;
-      font-size: 13px;
+      border-radius: 9px;
+      padding: 7px 10px;
+      font-size: 12.5px;
       font-weight: 600;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 4px;
       transition: all 0.15s ease;
     }
     button:active {
@@ -529,6 +531,9 @@
     </div>
 
     <div class="top-actions">
+      <button id="btnEdit" class="icon-btn primary" title="Editar seu texto em inglês">
+        ✏️ Editar Texto
+      </button>
       <button id="btnPhonetics" class="icon-btn active-toggle" title="Mostrar/Ocultar Dica Fonética">
         🗣️ Fonética
       </button>
@@ -537,9 +542,6 @@
       </button>
       <button id="btnCamera" class="icon-btn" title="Ativar Câmera e Gravação">
         📷
-      </button>
-      <button id="btnEdit" class="icon-btn" title="Editar seu texto em inglês">
-        ✏️ Texto
       </button>
     </div>
   </header>
