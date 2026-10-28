@@ -1,4 +1,4 @@
-const CACHE_NAME = "promptflow-v2";
+const CACHE_NAME = "promptflow-v4";
 const ASSETS = [
   "./",
   "./index.html",

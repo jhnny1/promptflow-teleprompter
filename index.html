@@ -24,8 +24,8 @@
       --phonetic-color: #fb923c;
       --success: #22c55e;
       --danger: #ef4444;
-      --font-size: 34px;
-      --line-height: 1.75;
+      --font-size: 26px;
+      --line-height: 1.65;
     }
 
     * {
@@ -47,19 +47,24 @@
       user-select: none;
     }
 
-    /* TOP HEADER / CONTROLS */
+    /* TOP HEADER / CONTROLS (PORTRAIT-FIRST) */
     header {
-      background: rgba(19, 27, 46, 0.94);
+      background: rgba(19, 27, 46, 0.96);
       backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--panel-border);
       padding: 8px 10px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
       gap: 6px;
       z-index: 30;
       flex-shrink: 0;
-      flex-wrap: wrap;
+    }
+
+    .header-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
     }
 
     .brand {
@@ -77,7 +82,7 @@
       align-items: center;
       gap: 5px;
       font-size: 11px;
-      padding: 3px 8px;
+      padding: 3px 9px;
       border-radius: 999px;
       background: #1e293b;
       color: #cbd5e1;
@@ -109,11 +114,10 @@
     }
 
     .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      flex-wrap: wrap;
-      margin-left: auto;
+      display: grid;
+      grid-template-columns: 1.3fr 1.1fr 0.8fr 0.8fr;
+      gap: 6px;
+      width: 100%;
     }
 
     button {
@@ -121,14 +125,15 @@
       color: var(--text);
       border: 1px solid #334155;
       border-radius: 9px;
-      padding: 7px 10px;
-      font-size: 12.5px;
+      padding: 8px 6px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 4px;
+      white-space: nowrap;
       transition: all 0.15s ease;
     }
     button:active {
@@ -228,7 +233,7 @@
       flex: 1;
       overflow-y: auto;
       scroll-behavior: smooth;
-      padding: 24vh 20px 62vh 24px;
+      padding: 18vh 14px 55vh 14px;
       line-height: var(--line-height);
       font-size: var(--font-size);
       transition: transform 0.25s ease;
@@ -520,10 +525,12 @@
 </head>
 <body>
 
-  <!-- TOP BAR -->
+  <!-- TOP BAR (100% VERTICAL / PORTRAIT FRIENDLY) -->
   <header>
-    <div class="brand">
-      <span>🎯 PromptFlow</span>
+    <div class="header-top-row">
+      <div class="brand">
+        <span>🎯 PromptFlow</span>
+      </div>
       <div id="statusPill" class="status-pill">
         <span class="dot"></span>
         <span id="statusText">Pronto</span>
@@ -531,17 +538,17 @@
     </div>
 
     <div class="top-actions">
-      <button id="btnEdit" class="icon-btn primary" title="Editar seu texto em inglês">
+      <button id="btnEdit" class="primary" title="Editar seu texto em inglês">
         ✏️ Editar Texto
       </button>
-      <button id="btnPhonetics" class="icon-btn active-toggle" title="Mostrar/Ocultar Dica Fonética">
+      <button id="btnPhonetics" class="active-toggle" title="Mostrar/Ocultar Dica Fonética">
         🗣️ Fonética
       </button>
-      <button id="btnMirror" class="icon-btn" title="Espelhar texto (Horizontal / Vertical)">
-        🪞
+      <button id="btnMirror" title="Espelhar texto">
+        🪞 Espelho
       </button>
-      <button id="btnCamera" class="icon-btn" title="Ativar Câmera e Gravação">
-        📷
+      <button id="btnCamera" title="Ativar Câmera">
+        📷 Câmera
       </button>
     </div>
   </header>
@@ -594,8 +601,8 @@
           <span>Modo</span>
         </label>
         <select id="selectMode">
-          <option value="hybrid" selected>Voz + Rolagem Suave</option>
-          <option value="voice">Só Voz (Tolerante)</option>
+          <option value="voice" selected>Só Voz (Tolerante)</option>
+          <option value="hybrid">Voz + Rolagem Suave</option>
           <option value="auto">Só Rolagem Automática</option>
         </select>
       </div>
@@ -611,9 +618,9 @@
       <div class="slider-group">
         <label>
           <span>Fonte</span>
-          <span id="lblFont">34px</span>
+          <span id="lblFont">26px</span>
         </label>
-        <input id="rangeFont" type="range" min="22" max="58" step="2" value="34" />
+        <input id="rangeFont" type="range" min="18" max="50" step="2" value="26" />
       </div>
     </div>
   </div>
@@ -815,10 +822,18 @@ Thank you very much for your attention, and I am happy to answer any questions.`
     /********************************************************************
      * 2. ACCENT-TOLERANT FUZZY & PHONETIC MATCHER (BR-EN ENGINE)
      ********************************************************************/
+    const STOP_WORDS = new Set([
+      "a", "an", "the", "to", "in", "on", "of", "for", "and", "or", "but",
+      "is", "are", "was", "were", "be", "been", "it", "its", "at", "by",
+      "with", "from", "as", "we", "our", "us", "you", "your", "i", "my",
+      "me", "he", "she", "they", "them", "this", "that", "these", "those",
+      "so", "if", "no", "not", "do", "did", "can", "will"
+    ]);
+
     /**
-     * Converts any English word into a "Brazilian-Accented Phonetic Skeleton"
-     * so that common mispronunciations or STT confusion (e.g. think/sink/fink,
-     * tree/three/free, world/word, walk/work, data/date) map to similar skeletons!
+     * Converts an English word into a Brazilian-Accented Phonetic Skeleton
+     * preserving 3 distinct vowel families (a, i, u) so words don't collide,
+     * while forgiving common BR pronunciation variations (th->t, w/v, sh/ch, etc.).
      */
     function toPhoneticSkeleton(word) {
       let s = word.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -826,20 +841,22 @@ Thank you very much for your attention, and I am happy to answer any questions.`
       return s
         .replace(/^kn/, "n")
         .replace(/^wr/, "r")
-        .replace(/^wh/, "w")
+        .replace(/^wh/, "v")
         .replace(/ph/g, "f")
         .replace(/gh/g, "")
-        .replace(/th/g, "t")       // BR speakers often pronounce th as t, d, s, or f
+        .replace(/th/g, "t")
         .replace(/sh|ch|sch/g, "x")
         .replace(/qu/g, "k")
         .replace(/[ckq]/g, "k")
         .replace(/[z]/g, "s")
-        .replace(/[v]/g, "w")
+        .replace(/[vw]/g, "v")
         .replace(/ing$/g, "in")
         .replace(/ed$/g, "d")
-        .replace(/es$/g, "s")
-        .replace(/[aeiouy]+/g, "a") // Collapse vowel variations (crucial for accented vowels!)
-        .replace(/(.)\1+/g, "$1");  // Collapse double letters
+        .replace(/e$/g, "")         // silent trailing e
+        .replace(/[eiy]+/g, "i")    // front vowels (ee, ea, i, e, y)
+        .replace(/[ou]+/g, "u")     // back vowels (oo, ou, o, u)
+        .replace(/a+/g, "a")
+        .replace(/(.)\1+/g, "$1");  // collapse double letters
     }
 
     function levenshtein(a, b) {
@@ -870,30 +887,32 @@ Thank you very much for your attention, and I am happy to answer any questions.`
       if (!spoken || !target) return 0;
       if (spoken === target) return 1.0;
 
-      // Ignore tiny stop-words from triggering false fuzzy jumps unless exact
-      if (target.length <= 2 || spoken.length <= 2) {
-        return spoken === target ? 0.9 : 0;
+      // Short words (<= 3 chars) must match nearly exactly
+      if (target.length <= 3 || spoken.length <= 3) {
+        if (toPhoneticSkeleton(spoken) === targetObj.skeleton && target.length === spoken.length) {
+          return 0.85;
+        }
+        return 0;
       }
 
-      // Prefix match (e.g., user said "present" for "presentation" or STT cut suffix)
-      if (target.startsWith(spoken) && spoken.length >= 3) return 0.88;
-      if (spoken.startsWith(target) && target.length >= 3) return 0.88;
+      // Prefix/stem match (e.g. "present" for "presentation" or "develop" for "development")
+      if ((target.startsWith(spoken) || spoken.startsWith(target)) && Math.min(spoken.length, target.length) >= 4) {
+        return 0.88;
+      }
 
-      // Phonetic skeleton comparison (tolerates vowel swaps & th/sh/ch/w/r accents)
       const skelSpoken = toPhoneticSkeleton(spoken);
       const skelTarget = targetObj.skeleton;
-      if (skelSpoken && skelSpoken === skelTarget && skelTarget.length >= 2) {
-        return 0.92;
+      if (skelSpoken && skelSpoken === skelTarget && skelTarget.length >= 3) {
+        return 0.90;
       }
 
-      // Levenshtein on raw & skeleton
       const rawDist = levenshtein(spoken, target);
       const rawScore = 1 - rawDist / Math.max(spoken.length, target.length);
 
       const skelDist = levenshtein(skelSpoken, skelTarget);
       const skelScore = 1 - skelDist / Math.max(skelSpoken.length, skelTarget.length, 1);
 
-      return Math.max(rawScore, skelScore * 0.95);
+      return Math.max(rawScore, skelScore * 0.92);
     }
 
     /********************************************************************
@@ -1076,20 +1095,25 @@ Thank you very much for your attention, and I am happy to answer any questions.`
     }
 
     /********************************************************************
-     * 5. SPEECH RECOGNITION ENGINE (TOLERANT TO BR ACCENT)
+     * 5. SPEECH RECOGNITION ENGINE (SEQUENTIAL + ANTI-RUNAWAY)
      ********************************************************************/
+    // Tracks how many words in each SpeechRecognitionResult have already been consumed
+    let consumedCounts = {};
+    let lastConsumedWord = "";
+    let lastConsumedAt = 0;
+
     function getLookaheadWindowSize() {
       const tol = selectTolerance.value;
-      if (tol === "high") return 14;   // Can skip several mispronounced words and lock onto the next clear word
-      if (tol === "medium") return 9;
-      return 5;
+      if (tol === "high") return 5;    // Tight 5-word window prevents jumping to end of paragraph
+      if (tol === "medium") return 4;
+      return 2;
     }
 
     function getMatchThreshold() {
       const tol = selectTolerance.value;
-      if (tol === "high") return 0.56; // Very forgiving phonetic match
-      if (tol === "medium") return 0.68;
-      return 0.80;
+      if (tol === "high") return 0.62;
+      if (tol === "medium") return 0.72;
+      return 0.82;
     }
 
     function initSpeechRecognition() {
@@ -1104,9 +1128,10 @@ Thank you very much for your attention, and I am happy to answer any questions.`
       rec.lang = "en-US";
       rec.continuous = true;
       rec.interimResults = true;
-      rec.maxAlternatives = 4;
+      rec.maxAlternatives = 3;
 
       rec.onstart = () => {
+        consumedCounts = {};
         if (isRunning) {
           statusPill.className = isRecording ? "status-pill recording" : "status-pill listening";
           statusText.textContent = isRecording ? "Gravando + Ouvindo" : "Ouvindo você...";
@@ -1116,40 +1141,67 @@ Thank you very much for your attention, and I am happy to answer any questions.`
       rec.onresult = (event) => {
         if (!isRunning || selectMode.value === "auto") return;
 
-        // Collect recent words across alternatives for maximum tolerance
-        let latestTranscript = "";
-        const spokenCandidates = [];
+        let displayTranscript = "";
+        const newWordsToProcess = [];
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const res = event.results[i];
-          latestTranscript += res[0].transcript + " ";
+          const primaryText = res[0].transcript.trim().toLowerCase();
+          if (!primaryText) continue;
 
-          // Extract last 5 words from each alternative hypothesis
-          for (let alt = 0; alt < res.length; alt++) {
-            const altWords = res[alt].transcript
-              .trim()
-              .toLowerCase()
-              .split(/\s+/)
-              .slice(-6);
-            spokenCandidates.push(...altWords);
+          displayTranscript = primaryText;
+          const words = primaryText.split(/\s+/).filter(Boolean);
+          const prevCount = consumedCounts[i] || 0;
+
+          // Only take words that haven't been consumed yet in this utterance segment
+          if (words.length > prevCount) {
+            for (let w = prevCount; w < words.length; w++) {
+              // Gather alternatives for this specific word position if available
+              const altVariants = [words[w]];
+              for (let a = 1; a < res.length; a++) {
+                const altSplit = res[a].transcript.trim().toLowerCase().split(/\s+/);
+                if (altSplit[w]) altVariants.push(altSplit[w]);
+              }
+              newWordsToProcess.push({
+                resultIdx: i,
+                wordPos: w,
+                variants: altVariants,
+                prevSpoken: w > 0 ? words[w - 1] : null
+              });
+            }
+            // Mark all completed words (except the very last one if still interim and unmatched) as seen
+            if (words.length > 1) {
+              consumedCounts[i] = words.length - 1;
+            }
+          } else if (words.length === prevCount && words.length > 0) {
+            // The trailing interim word may have been refined (e.g. "arch" -> "architecture")
+            const lastIdx = words.length - 1;
+            newWordsToProcess.push({
+              resultIdx: i,
+              wordPos: lastIdx,
+              variants: [words[lastIdx]],
+              prevSpoken: lastIdx > 0 ? words[lastIdx - 1] : null
+            });
           }
         }
 
-        if (latestTranscript.trim()) {
-          heardTranscript.textContent = `🎙️ "${latestTranscript.trim().slice(-65)}"`;
+        if (displayTranscript) {
+          heardTranscript.textContent = `🎙️ "${displayTranscript.slice(-55)}"`;
         }
 
-        processSpokenWords(spokenCandidates);
+        if (newWordsToProcess.length > 0) {
+          processSpokenTokens(newWordsToProcess);
+        }
       };
 
       rec.onerror = (e) => {
         if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-          heardTranscript.textContent = "⚠️ Permissão de microfone negada ou exige HTTPS/localhost. Rolagem automática ativa.";
+          heardTranscript.textContent = "⚠️ Permissão de microfone negada. Rolagem automática ativa.";
         }
       };
 
       rec.onend = () => {
-        // Android Chrome stops recognition periodically; auto-restart seamlessly if still running
+        consumedCounts = {};
         if (isRunning && selectMode.value !== "auto") {
           try {
             rec.start();
@@ -1161,60 +1213,91 @@ Thank you very much for your attention, and I am happy to answer any questions.`
     }
 
     /**
-     * Matches recent spoken words against the lookahead window in the script.
-     * Supports jumping over words that the user mispronounced or skipped!
+     * Sequentially matches newly spoken tokens without ever jumping wildly ahead.
      */
-    function processSpokenWords(spokenWords) {
-      if (!spokenWords.length || currentIndex >= wordsList.length) return;
+    function processSpokenTokens(tokens) {
+      if (currentIndex >= wordsList.length) return;
 
       const lookahead = getLookaheadWindowSize();
-      const threshold = getMatchThreshold();
-      const maxSearchIndex = Math.min(wordsList.length - 1, currentIndex + lookahead);
+      const baseThreshold = getMatchThreshold();
+      let didAdvance = false;
 
-      let bestTargetIdx = -1;
-      let bestCombinedScore = 0;
+      for (const token of tokens) {
+        if (currentIndex >= wordsList.length) break;
 
-      // Evaluate recent spoken words (most recent last)
-      const recentSpoken = spokenWords.slice(-8);
+        const primaryWord = token.variants[0].replace(/[^a-z0-9]/g, "");
+        if (!primaryWord) continue;
 
-      for (let sIdx = 0; sIdx < recentSpoken.length; sIdx++) {
-        const spokenWord = recentSpoken[sIdx];
-        const prevSpoken = sIdx > 0 ? recentSpoken[sIdx - 1] : null;
+        // Prevent rapid duplicate trigger of the exact same word within 350ms
+        const now = Date.now();
+        if (
+          primaryWord === lastConsumedWord &&
+          now - lastConsumedAt < 350 &&
+          wordsList[currentIndex]?.clean !== primaryWord
+        ) {
+          continue;
+        }
 
-        for (let wIdx = currentIndex; wIdx <= maxSearchIndex; wIdx++) {
+        const maxIdx = Math.min(wordsList.length - 1, currentIndex + lookahead);
+        let matchedIdx = -1;
+
+        for (let wIdx = currentIndex; wIdx <= maxIdx; wIdx++) {
           const targetObj = wordsList[wIdx];
-          const distancePenalty = (wIdx - currentIndex) * 0.022; // Prefer closer words slightly
-          let score = wordSimilarity(spokenWord, targetObj) - distancePenalty;
-
-          // Bonus if 2 consecutive words match (N-gram anchor for confident jump ahead)
-          if (prevSpoken && wIdx > currentIndex) {
-            const prevSim = wordSimilarity(prevSpoken, wordsList[wIdx - 1]);
-            if (prevSim >= 0.6) {
-              score += 0.25;
-            }
-          }
-
-          // For long Jumps (> 5 words ahead), require either a longer word (>=4 chars) or 2-word match
           const jumpDist = wIdx - currentIndex;
-          if (jumpDist > 4 && targetObj.clean.length < 4 && score < 0.95) {
+          const isStopOrTiny = STOP_WORDS.has(targetObj.clean) || targetObj.clean.length <= 3;
+
+          // RULE 1: Stop-words and short words (the, to, and, in, we...) can ONLY match
+          // the immediate word (jumpDist === 0) or next word (jumpDist === 1).
+          // They are NEVER allowed to jump 2+ words ahead!
+          if (isStopOrTiny && jumpDist >= 2) {
             continue;
           }
 
-          if (score >= threshold && score > bestCombinedScore) {
-            bestCombinedScore = score;
-            bestTargetIdx = wIdx;
+          // Compute best similarity across STT alternatives for this word
+          let bestSim = 0;
+          for (const v of token.variants) {
+            const sim = wordSimilarity(v, targetObj);
+            if (sim > bestSim) bestSim = sim;
           }
+
+          // Bonus if previous spoken word also matched the preceding script word
+          let twoWordPairMatch = false;
+          if (token.prevSpoken && wIdx > 0) {
+            const prevSim = wordSimilarity(token.prevSpoken, wordsList[wIdx - 1]);
+            if (prevSim >= 0.7) {
+              twoWordPairMatch = true;
+              bestSim += 0.15;
+            }
+          }
+
+          // RULE 2: Stricter requirement the further ahead we look
+          const requiredScore = jumpDist === 0
+            ? baseThreshold - 0.06
+            : jumpDist === 1
+              ? baseThreshold
+              : twoWordPairMatch
+                ? baseThreshold + 0.05
+                : Math.max(0.78, baseThreshold + jumpDist * 0.06);
+
+          if (bestSim >= requiredScore) {
+            matchedIdx = wIdx;
+            break; // Always take the FIRST (closest) valid match in sequence!
+          }
+        }
+
+        if (matchedIdx !== -1) {
+          // Consume this word so interimResults won't process it again!
+          consumedCounts[token.resultIdx] = token.wordPos + 1;
+          lastConsumedWord = primaryWord;
+          lastConsumedAt = Date.now();
+          lastVoiceAdvanceTime = Date.now();
+
+          currentIndex = Math.min(wordsList.length - 1, matchedIdx + 1);
+          didAdvance = true;
         }
       }
 
-      if (bestTargetIdx >= currentIndex) {
-        // Advance to the word right after the one just spoken (or onto it if it's a jump)
-        const nextPos = bestTargetIdx === currentIndex
-          ? currentIndex + 1
-          : bestTargetIdx + 1;
-
-        currentIndex = Math.min(wordsList.length - 1, nextPos);
-        lastVoiceAdvanceTime = Date.now();
+      if (didAdvance) {
         updateActiveWordUI(false);
       }
     }
@@ -1222,8 +1305,12 @@ Thank you very much for your attention, and I am happy to answer any questions.`
     /********************************************************************
      * 6. HYBRID / AUTO-SCROLL LOOP
      ********************************************************************/
+    let lastAutoStepTime = 0;
+
     function startAutoScrollLoop() {
       stopAutoScrollLoop();
+      lastAutoStepTime = Date.now();
+
       autoScrollTimer = setInterval(() => {
         if (!isRunning) return;
         const mode = selectMode.value;
@@ -1231,21 +1318,31 @@ Thank you very much for your attention, and I am happy to answer any questions.`
 
         if (mode === "voice" || speedVal <= 0) return;
 
-        // In hybrid mode, if voice recently advanced the cursor (< 2.4s ago), let voice lead!
-        // If the speaker paused or mic missed a word for > 2.4s, gently advance word-by-word
-        const timeSinceVoice = Date.now() - lastVoiceAdvanceTime;
-        const waitMs = Math.max(450, 2600 - speedVal * 260);
+        // Calculate milliseconds per word based on speed slider (e.g., 2.0x -> ~750ms/word)
+        const msPerWord = Math.max(240, Math.round(1500 / Math.max(0.5, speedVal)));
+        const now = Date.now();
 
-        if (mode === "auto" || (mode === "hybrid" && timeSinceVoice > waitMs)) {
-          if (currentIndex < wordsList.length - 1) {
-            currentIndex++;
-            lastVoiceAdvanceTime = Date.now();
-            updateActiveWordUI(false);
-          } else {
-            stopPresentation();
+        if (mode === "auto") {
+          if (now - lastAutoStepTime >= msPerWord) {
+            lastAutoStepTime = now;
+            if (currentIndex < wordsList.length - 1) {
+              currentIndex++;
+              updateActiveWordUI(false);
+            } else {
+              stopPresentation();
+            }
+          }
+        } else if (mode === "hybrid") {
+          // In hybrid mode, only step gently if voice hasn't advanced for 2.8 seconds
+          if (now - lastVoiceAdvanceTime > 2800 && now - lastAutoStepTime >= msPerWord * 1.3) {
+            lastAutoStepTime = now;
+            if (currentIndex < wordsList.length - 1) {
+              currentIndex++;
+              updateActiveWordUI(false);
+            }
           }
         }
-      }, 350);
+      }, 150);
     }
 
     function stopAutoScrollLoop() {
@@ -1600,7 +1697,16 @@ Thank you very much for your attention, and I am happy to answer any questions.`
       parseAndRenderScript(initialScript);
       requestWakeLock();
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js").catch(() => {});
+        navigator.serviceWorker.register("./sw.js").then((reg) => {
+          reg.update();
+        }).catch(() => {});
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
       }
     });
   </script>
