@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#090d16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.json" />
+  <title>PromptFlow EN — Teleprompter Inteligente</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --panel: #131b2e;
+      --panel-border: #23304d;
+      --text: #f1f5f9;
+      --text-muted: #64748b;
+      --text-read: #475569;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.28);
+      --active-word-bg: #facc15;
+      --active-word-text: #090d16;
+      --phonetic-color: #fb923c;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --font-size: 34px;
+      --line-height: 1.75;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100dvh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* TOP HEADER / CONTROLS */
+    header {
+      background: rgba(19, 27, 46, 0.94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--panel-border);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      z-index: 30;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #1e293b;
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+    .status-pill.listening {
+      background: rgba(34, 197, 94, 0.18);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.4);
+    }
+    .status-pill.recording {
+      background: rgba(239, 68, 68, 0.22);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.5);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .listening .dot, .recording .dot {
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(1.25); }
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: nowrap;
+    }
+
+    button {
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    button:active {
+      transform: scale(0.96);
+    }
+    button.primary {
+      background: var(--accent);
+      color: #090d16;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    button.success {
+      background: var(--success);
+      color: #052e16;
+      border-color: var(--success);
+      font-weight: 700;
+    }
+    button.danger {
+      background: var(--danger);
+      color: #fff;
+      border-color: var(--danger);
+    }
+    button.active-toggle {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    button.icon-btn {
+      padding: 8px 10px;
+      font-size: 15px;
+    }
+
+    /* MAIN TELEPROMPTER STAGE */
+    .stage-wrapper {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Camera background or PiP */
+    #cameraVideo {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: 110px;
+      height: 146px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 2px solid var(--accent);
+      z-index: 22;
+      background: #000;
+      transform: scaleX(-1);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      display: none;
+    }
+    #cameraVideo.bg-mode {
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+      border: none;
+      opacity: 0.26;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Eye-level guide band (near the top so eyes stay near selfie camera) */
+    .eye-guide {
+      position: absolute;
+      top: 22%;
+      left: 0;
+      right: 0;
+      height: 78px;
+      border-top: 1px dashed rgba(56, 189, 248, 0.35);
+      border-bottom: 1px dashed rgba(56, 189, 248, 0.35);
+      background: linear-gradient(90deg, rgba(56,189,248,0.06) 0%, rgba(56,189,248,0.12) 50%, rgba(56,189,248,0.06) 100%);
+      pointer-events: none;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+    }
+    .eye-guide::before {
+      content: "▶";
+      color: var(--accent);
+      font-size: 14px;
+      margin-left: 6px;
+      opacity: 0.8;
+    }
+
+    /* Scrollable Prompter Area */
+    #prompterScroll {
+      position: relative;
+      z-index: 10;
+      flex: 1;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+      padding: 24vh 20px 62vh 24px;
+      line-height: var(--line-height);
+      font-size: var(--font-size);
+      transition: transform 0.25s ease;
+    }
+    #prompterScroll.mirror-h {
+      transform: scaleX(-1);
+    }
+    #prompterScroll.mirror-v {
+      transform: scaleY(-1);
+    }
+    #prompterScroll.mirror-hv {
+      transform: scale(-1, -1);
+    }
+
+    .paragraph-block {
+      margin-bottom: 0.9em;
+    }
+
+    /* Word tokens with optional phonetic ruby above */
+    .word-token {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      vertical-align: bottom;
+      margin: 0 0.14em 0.18em 0.14em;
+      padding: 0.04em 0.18em;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.14s ease, color 0.14s ease, transform 0.14s ease;
+      position: relative;
+    }
+
+    .word-token .phonetic-hint {
+      font-size: 0.42em;
+      line-height: 1.1;
+      color: var(--phonetic-color);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      font-style: italic;
+      opacity: 0.95;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .hide-phonetics .word-token .phonetic-hint {
+      display: none;
+    }
+
+    .word-token .word-text {
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .word-token.read {
+      color: var(--text-read);
+    }
+    .word-token.read .phonetic-hint {
+      opacity: 0.35;
+    }
+
+    .word-token.current {
+      background: var(--active-word-bg);
+      color: var(--active-word-text);
+      transform: scale(1.06);
+      box-shadow: 0 0 18px rgba(250, 204, 21, 0.45);
+      z-index: 2;
+    }
+    .word-token.current .phonetic-hint {
+      color: #7c2d12;
+      font-weight: 800;
+    }
+
+    .word-token.next-window {
+      border-bottom: 2px dotted rgba(56, 189, 248, 0.35);
+    }
+
+    /* Live Speech Transcript Bar (shows what the mic heard) */
+    .heard-bar {
+      background: rgba(15, 23, 42, 0.92);
+      border-top: 1px solid var(--panel-border);
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      z-index: 25;
+      flex-shrink: 0;
+    }
+    .heard-text {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #e2e8f0;
+      font-style: italic;
+    }
+    .progress-label {
+      font-weight: 700;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* BOTTOM CONTROLS BAR */
+    .bottom-bar {
+      background: var(--panel);
+      border-top: 1px solid var(--panel-border);
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 30;
+      flex-shrink: 0;
+    }
+
+    .main-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .play-btn {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 15px;
+      border-radius: 12px;
+    }
+
+    .sliders-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      background: rgba(9, 13, 22, 0.55);
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .slider-group label {
+      font-size: 11px;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+    .slider-group input[type="range"],
+    .slider-group select {
+      width: 100%;
+      accent-color: var(--accent);
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      font-size: 12px;
+      padding: 2px 4px;
+    }
+
+    /* MODAL FOR EDITING SCRIPT & PHONETICS */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 640px;
+      max-height: 90dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    }
+    .modal-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .modal-body {
+      padding: 14px 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-body textarea {
+      width: 100%;
+      min-height: 220px;
+      background: #090d16;
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 15px;
+      line-height: 1.5;
+      font-family: inherit;
+      resize: vertical;
+    }
+    .helper-box {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      color: #cbd5e1;
+    }
+    .modal-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--panel-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* Word Quick-Coach Popover (Speak / Edit phonetic) */
+    #wordPopover {
+      position: fixed;
+      bottom: 148px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 8px 12px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      z-index: 60;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.65);
+      max-width: 94vw;
+    }
+    #wordPopover.show {
+      display: flex;
+    }
+    #wordPopover .pop-word {
+      font-weight: 700;
+      color: var(--active-word-bg);
+      font-size: 15px;
+    }
+
+    /* Download Recording Banner */
+    #downloadBanner {
+      background: rgba(34, 197, 94, 0.16);
+      border-bottom: 1px solid rgba(34, 197, 94, 0.4);
+      padding: 8px 14px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      z-index: 35;
+    }
+    #downloadBanner.show {
+      display: flex;
+    }
+    #downloadBanner a {
+      background: var(--success);
+      color: #052e16;
+      text-decoration: none;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header>
+    <div class="brand">
+      <span>🎯 PromptFlow</span>
+      <div id="statusPill" class="status-pill">
+        <span class="dot"></span>
+        <span id="statusText">Pronto</span>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="btnPhonetics" class="icon-btn active-toggle" title="Mostrar/Ocultar Dica Fonética">
+        🗣️ Fonética
+      </button>
+      <button id="btnMirror" class="icon-btn" title="Espelhar texto (Horizontal / Vertical)">
+        🪞
+      </button>
+      <button id="btnCamera" class="icon-btn" title="Ativar Câmera e Gravação">
+        📷
+      </button>
+      <button id="btnEdit" class="icon-btn" title="Editar seu texto em inglês">
+        ✏️ Texto
+      </button>
+    </div>
+  </header>
+
+  <!-- RECORDING DOWNLOAD BANNER -->
+  <div id="downloadBanner">
+    <span>🎬 Gravação concluída!</span>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <a id="downloadLink" href="#" download="apresentacao.webm">⬇️ Baixar Vídeo/Áudio</a>
+      <button id="btnCloseBanner" style="padding:4px 8px; font-size:11px;">✕</button>
+    </div>
+  </div>
+
+  <!-- TELEPROMPTER STAGE -->
+  <div class="stage-wrapper">
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <div class="eye-guide"></div>
+    <div id="prompterScroll"></div>
+  </div>
+
+  <!-- WORD COACH POPOVER (Appears when tapping a word while paused) -->
+  <div id="wordPopover">
+    <span id="popWordLabel" class="pop-word">word</span>
+    <button id="btnSpeakNormal" style="padding:5px 9px; font-size:12px;">🔊 Ouvir</button>
+    <button id="btnSpeakSlow" style="padding:5px 9px; font-size:12px;">🐢 Lento</button>
+    <button id="btnCustomPhonetic" style="padding:5px 9px; font-size:12px;">✏️ Dica</button>
+    <button id="btnJumpHere" style="padding:5px 9px; font-size:12px;">⏭️ Ler daqui</button>
+    <button id="btnClosePop" style="padding:5px 7px; font-size:12px;">✕</button>
+  </div>
+
+  <!-- LIVE TRANSCRIPT / PROGRESS BAR -->
+  <div class="heard-bar">
+    <span id="heardTranscript" class="heard-text">Toque em qualquer palavra para ouvir a pronúncia ou começar dela.</span>
+    <span id="progressCounter" class="progress-label">0%</span>
+  </div>
+
+  <!-- BOTTOM CONTROLS -->
+  <div class="bottom-bar">
+    <div class="main-controls">
+      <button id="btnReset" class="icon-btn" title="Voltar ao início">⏮️</button>
+      <button id="btnPrev" class="icon-btn" title="Voltar 1 frase">⏪</button>
+      <button id="btnStartStop" class="play-btn success">▶️ Iniciar Apresentação</button>
+      <button id="btnNext" class="icon-btn" title="Avançar 1 frase">⏩</button>
+      <button id="btnRecord" class="icon-btn" title="Gravar apresentação (Vídeo/Áudio)">🔴</button>
+    </div>
+
+    <div class="sliders-row">
+      <div class="slider-group">
+        <label>
+          <span>Modo</span>
+        </label>
+        <select id="selectMode">
+          <option value="hybrid" selected>Voz + Rolagem Suave</option>
+          <option value="voice">Só Voz (Tolerante)</option>
+          <option value="auto">Só Rolagem Automática</option>
+        </select>
+      </div>
+
+      <div class="slider-group">
+        <label>
+          <span>Vel. Base</span>
+          <span id="lblSpeed">2.0x</span>
+        </label>
+        <input id="rangeSpeed" type="range" min="0" max="8" step="0.5" value="2" />
+      </div>
+
+      <div class="slider-group">
+        <label>
+          <span>Fonte</span>
+          <span id="lblFont">34px</span>
+        </label>
+        <input id="rangeFont" type="range" min="22" max="58" step="2" value="34" />
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT EDITOR MODAL -->
+  <div id="editorModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <span>📝 Seu Roteiro em Inglês</span>
+        <button id="btnCloseModal" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="helper-box">
+          💡 <strong>Dica:</strong> Cole seu texto em inglês abaixo. Você também pode escrever dicas personalizadas entre colchetes logo após uma palavra, ex: <code>schedule[skédjul]</code>, ou deixar que o app gere automaticamente a pronúncia das palavras mais difíceis!
+        </div>
+        <textarea id="scriptInput" placeholder="Cole seu texto em inglês aqui..."></textarea>
+
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:13px;">
+          <label style="display:flex; align-items:center; gap:6px;">
+            <span>Tolerância a Sotaque:</span>
+            <select id="selectTolerance" style="background:#090d16; color:#fff; border:1px solid #334155; padding:4px 8px; border-radius:6px;">
+              <option value="high" selected>Alta (Ideal para inglês travado/sotaque BR)</option>
+              <option value="medium">Média</option>
+              <option value="strict">Estrita</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnLoadSample">Carregar Exemplo</button>
+        <button id="btnSaveScript" class="primary">💾 Salvar e Preparar Texto</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /********************************************************************
+     * 1. DEFAULT PRESENTATION SCRIPT + BRAZILIAN PHONETIC DICTIONARY
+     ********************************************************************/
+    const DEFAULT_SCRIPT = `Hello everyone, thank you for joining this presentation today.
+
+Today I would like to share our project architecture, the main challenges we faced, and the results we achieved over the last few months.
+
+First, let's talk about our workflow and how we improved system performance. Although the initial environment was complex, our team focused on building a reliable and scalable solution.
+
+Throughout the development process, we analyzed the data carefully to measure our growth and identify new opportunities for the future.
+
+Thank you very much for your attention, and I am happy to answer any questions.`;
+
+    // Curated phonetic hints tailored for Brazilian Portuguese speakers reading English
+    const BR_PHONETIC_DICT = {
+      "hello": "relôu",
+      "everyone": "évri-uãn",
+      "thank": "thénk",
+      "joining": "djóinin",
+      "presentation": "prezentêixan",
+      "today": "tudêi",
+      "would": "uúd",
+      "share": "xér",
+      "project": "pródjekt",
+      "architecture": "árki-téktcher",
+      "main": "mêin",
+      "challenges": "tchálendjes",
+      "challenge": "tchálendj",
+      "faced": "fêist",
+      "results": "rizâlts",
+      "achieved": "atchívd",
+      "achieve": "atchív",
+      "over": "ôuver",
+      "months": "mânths",
+      "first": "fârst",
+      "talk": "tók",
+      "about": "abáut",
+      "workflow": "uôrk-flôu",
+      "improved": "imprúvd",
+      "improve": "imprúv",
+      "system": "sístem",
+      "performance": "perfórmans",
+      "although": "ól-dôu",
+      "initial": "iníxal",
+      "environment": "enváiron-ment",
+      "complex": "kômpleks",
+      "focused": "fôukust",
+      "focus": "fôukus",
+      "building": "bíldin",
+      "reliable": "riláiabol",
+      "scalable": "skêilabol",
+      "solution": "solúxan",
+      "throughout": "thru-áut",
+      "through": "thru",
+      "thought": "thót",
+      "though": "dôu",
+      "development": "devélopment",
+      "process": "próces",
+      "analyzed": "ánalaizd",
+      "analysis": "análisis",
+      "data": "dêita",
+      "carefully": "kérfuli",
+      "measure": "méjar",
+      "growth": "grôuth",
+      "identify": "aidéntifai",
+      "opportunities": "oportiúnitis",
+      "opportunity": "oportiúniti",
+      "future": "fiútcher",
+      "attention": "atênxan",
+      "answer": "énser",
+      "questions": "kuéstchans",
+      "question": "kuéstchan",
+      "schedule": "skédjul",
+      "technology": "teknólodji",
+      "features": "fítchers",
+      "feature": "fítcher",
+      "world": "uôrld",
+      "work": "uôrk",
+      "business": "bíznes",
+      "successful": "saksésful",
+      "success": "saksés",
+      "knowledge": "nóledj",
+      "strategy": "strátedji",
+      "colleagues": "kóligs",
+      "customers": "kâstomers",
+      "important": "impórtant",
+      "experience": "ekspíriens",
+      "different": "dífrent",
+      "example": "igzêmpol",
+      "because": "bikóz",
+      "before": "bifór",
+      "between": "bituín",
+      "without": "uitháut",
+      "actually": "áktchuali",
+      "usually": "iújuali",
+      "especially": "ispéxali",
+      "available": "avêilabol",
+      "requirement": "rikuáirment",
+      "requirements": "rikuáirments",
+      "infrastructure": "ínfra-strâktcher",
+      "management": "mánedjment",
+      "deployment": "diplóiment",
+      "security": "sekiúriti",
+      "integration": "integrêixan",
+      "application": "aplikêixan",
+      "applications": "aplikêixans",
+      "efficiency": "efíxenci",
+      "quality": "kuóliti",
+      "value": "váliu",
+      "revenue": "réveniu",
+      "budget": "bâdjet",
+      "quarter": "kuórter",
+      "summary": "sâmari",
+      "conclusion": "konklújan"
+    };
+
+    // Custom user phonetic overrides saved in localStorage
+    let customPhonetics = JSON.parse(localStorage.getItem("pf_custom_phonetics") || "{}");
+
+    /**
+     * Generates an automatic Brazilian-friendly phonetic hint for difficult English words
+     * if not already in the dictionary.
+     */
+    function getPhoneticHint(rawWord, explicitHint) {
+      if (explicitHint) return explicitHint;
+      const clean = rawWord.toLowerCase().replace(/[^a-z]/g, "");
+      if (!clean || clean.length <= 3) return "";
+      if (customPhonetics[clean] !== undefined) return customPhonetics[clean];
+      if (BR_PHONETIC_DICT[clean]) return BR_PHONETIC_DICT[clean];
+
+      // Auto-generate phonetic hints only for tricky patterns or longer words (>= 7 chars)
+      const hasTrickyCluster = /(ough|igh|tion|sion|ture|kn|wr|wh|th|ea|oo|ow|ew|ph|ch|sh|qu)/.test(clean);
+      if (!hasTrickyCluster && clean.length < 8) return "";
+
+      let p = clean
+        .replace(/^kn/, "n")
+        .replace(/^wr/, "r")
+        .replace(/^wh/, "u")
+        .replace(/ught/g, "t")
+        .replace(/ough/g, "ôu")
+        .replace(/igh/g, "ái")
+        .replace(/tion/g, "xan")
+        .replace(/sion/g, "jan")
+        .replace(/ture/g, "tcher")
+        .replace(/ph/g, "f")
+        .replace(/sh/g, "x")
+        .replace(/ch/g, "tch")
+        .replace(/th/g, "th")
+        .replace(/qu/g, "ku")
+        .replace(/ea/g, "í")
+        .replace(/ee/g, "í")
+        .replace(/oo/g, "ú")
+        .replace(/ou/g, "áu")
+        .replace(/ow/g, "ôu")
+        .replace(/ew/g, "iú")
+        .replace(/ing$/g, "in")
+        .replace(/ed$/g, "d")
+        .replace(/e$/g, "");
+
+      return p !== clean ? p : "";
+    }
+
+    /********************************************************************
+     * 2. ACCENT-TOLERANT FUZZY & PHONETIC MATCHER (BR-EN ENGINE)
+     ********************************************************************/
+    /**
+     * Converts any English word into a "Brazilian-Accented Phonetic Skeleton"
+     * so that common mispronunciations or STT confusion (e.g. think/sink/fink,
+     * tree/three/free, world/word, walk/work, data/date) map to similar skeletons!
+     */
+    function toPhoneticSkeleton(word) {
+      let s = word.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!s) return "";
+      return s
+        .replace(/^kn/, "n")
+        .replace(/^wr/, "r")
+        .replace(/^wh/, "w")
+        .replace(/ph/g, "f")
+        .replace(/gh/g, "")
+        .replace(/th/g, "t")       // BR speakers often pronounce th as t, d, s, or f
+        .replace(/sh|ch|sch/g, "x")
+        .replace(/qu/g, "k")
+        .replace(/[ckq]/g, "k")
+        .replace(/[z]/g, "s")
+        .replace(/[v]/g, "w")
+        .replace(/ing$/g, "in")
+        .replace(/ed$/g, "d")
+        .replace(/es$/g, "s")
+        .replace(/[aeiouy]+/g, "a") // Collapse vowel variations (crucial for accented vowels!)
+        .replace(/(.)\1+/g, "$1");  // Collapse double letters
+    }
+
+    function levenshtein(a, b) {
+      if (a === b) return 0;
+      if (!a.length) return b.length;
+      if (!b.length) return a.length;
+      const v0 = new Array(b.length + 1);
+      const v1 = new Array(b.length + 1);
+      for (let i = 0; i <= b.length; i++) v0[i] = i;
+      for (let i = 0; i < a.length; i++) {
+        v1[0] = i + 1;
+        for (let j = 0; j < b.length; j++) {
+          const cost = a[i] === b[j] ? 0 : 1;
+          v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+        }
+        for (let j = 0; j <= b.length; j++) v0[j] = v1[j];
+      }
+      return v1[b.length];
+    }
+
+    /**
+     * Returns a similarity score [0.0 .. 1.0] between a spoken word (from STT)
+     * and a target word in the script.
+     */
+    function wordSimilarity(spokenRaw, targetObj) {
+      const spoken = spokenRaw.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const target = targetObj.clean;
+      if (!spoken || !target) return 0;
+      if (spoken === target) return 1.0;
+
+      // Ignore tiny stop-words from triggering false fuzzy jumps unless exact
+      if (target.length <= 2 || spoken.length <= 2) {
+        return spoken === target ? 0.9 : 0;
+      }
+
+      // Prefix match (e.g., user said "present" for "presentation" or STT cut suffix)
+      if (target.startsWith(spoken) && spoken.length >= 3) return 0.88;
+      if (spoken.startsWith(target) && target.length >= 3) return 0.88;
+
+      // Phonetic skeleton comparison (tolerates vowel swaps & th/sh/ch/w/r accents)
+      const skelSpoken = toPhoneticSkeleton(spoken);
+      const skelTarget = targetObj.skeleton;
+      if (skelSpoken && skelSpoken === skelTarget && skelTarget.length >= 2) {
+        return 0.92;
+      }
+
+      // Levenshtein on raw & skeleton
+      const rawDist = levenshtein(spoken, target);
+      const rawScore = 1 - rawDist / Math.max(spoken.length, target.length);
+
+      const skelDist = levenshtein(skelSpoken, skelTarget);
+      const skelScore = 1 - skelDist / Math.max(skelSpoken.length, skelTarget.length, 1);
+
+      return Math.max(rawScore, skelScore * 0.95);
+    }
+
+    /********************************************************************
+     * 3. STATE & DOM ELEMENTS
+     ********************************************************************/
+    let wordsList = []; // [{ index, raw, clean, skeleton, phonetic, el }]
+    let currentIndex = 0;
+    let isRunning = false;
+    let mirrorState = 0; // 0: normal, 1: mirror-h, 2: mirror-v, 3: mirror-hv
+    let showPhonetics = true;
+    let selectedWordIdx = null;
+
+    // Speech Recognition state
+    let recognition = null;
+    let autoScrollTimer = null;
+    let lastVoiceAdvanceTime = 0;
+
+    // Camera & Recording state
+    let mediaStream = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let cameraMode = 0; // 0: off, 1: PiP top-right, 2: background translucent
+    let isRecording = false;
+
+    // DOM References
+    const prompterScroll = document.getElementById("prompterScroll");
+    const statusPill = document.getElementById("statusPill");
+    const statusText = document.getElementById("statusText");
+    const heardTranscript = document.getElementById("heardTranscript");
+    const progressCounter = document.getElementById("progressCounter");
+    const btnStartStop = document.getElementById("btnStartStop");
+    const btnReset = document.getElementById("btnReset");
+    const btnPrev = document.getElementById("btnPrev");
+    const btnNext = document.getElementById("btnNext");
+    const btnRecord = document.getElementById("btnRecord");
+    const btnPhonetics = document.getElementById("btnPhonetics");
+    const btnMirror = document.getElementById("btnMirror");
+    const btnCamera = document.getElementById("btnCamera");
+    const btnEdit = document.getElementById("btnEdit");
+    const selectMode = document.getElementById("selectMode");
+    const rangeSpeed = document.getElementById("rangeSpeed");
+    const lblSpeed = document.getElementById("lblSpeed");
+    const rangeFont = document.getElementById("rangeFont");
+    const lblFont = document.getElementById("lblFont");
+    const selectTolerance = document.getElementById("selectTolerance");
+
+    // Modal DOM
+    const editorModal = document.getElementById("editorModal");
+    const scriptInput = document.getElementById("scriptInput");
+    const btnCloseModal = document.getElementById("btnCloseModal");
+    const btnSaveScript = document.getElementById("btnSaveScript");
+    const btnLoadSample = document.getElementById("btnLoadSample");
+
+    // Popover DOM
+    const wordPopover = document.getElementById("wordPopover");
+    const popWordLabel = document.getElementById("popWordLabel");
+    const btnSpeakNormal = document.getElementById("btnSpeakNormal");
+    const btnSpeakSlow = document.getElementById("btnSpeakSlow");
+    const btnCustomPhonetic = document.getElementById("btnCustomPhonetic");
+    const btnJumpHere = document.getElementById("btnJumpHere");
+    const btnClosePop = document.getElementById("btnClosePop");
+
+    // Camera & Download DOM
+    const cameraVideo = document.getElementById("cameraVideo");
+    const downloadBanner = document.getElementById("downloadBanner");
+    const downloadLink = document.getElementById("downloadLink");
+    const btnCloseBanner = document.getElementById("btnCloseBanner");
+
+    /********************************************************************
+     * 4. PARSE & RENDER SCRIPT
+     ********************************************************************/
+    function parseAndRenderScript(scriptText) {
+      prompterScroll.innerHTML = "";
+      wordsList = [];
+      currentIndex = 0;
+
+      const paragraphs = scriptText.split(/\n\s*\n/);
+      let globalIdx = 0;
+
+      paragraphs.forEach((paraText) => {
+        const trimmed = paraText.trim();
+        if (!trimmed) return;
+
+        const pBlock = document.createElement("div");
+        pBlock.className = "paragraph-block";
+
+        // Match tokens like word[custom-phonetic] or standard words
+        const tokens = trimmed.split(/\s+/);
+        tokens.forEach((token) => {
+          // Check if token has inline bracket phonetic: e.g. schedule[skédjul]
+          let displayWord = token;
+          let explicitHint = "";
+          const bracketMatch = token.match(/^([^\[\]]+)\[([^\[\]]+)\](.*)$/);
+          if (bracketMatch) {
+            displayWord = bracketMatch[1] + bracketMatch[3];
+            explicitHint = bracketMatch[2];
+          }
+
+          const clean = displayWord.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const skeleton = toPhoneticSkeleton(clean);
+          const phonetic = getPhoneticHint(displayWord, explicitHint);
+
+          const span = document.createElement("span");
+          span.className = "word-token";
+          span.dataset.idx = globalIdx;
+
+          if (phonetic) {
+            const ruby = document.createElement("span");
+            ruby.className = "phonetic-hint";
+            ruby.textContent = phonetic;
+            span.appendChild(ruby);
+          }
+
+          const wText = document.createElement("span");
+          wText.className = "word-text";
+          wText.textContent = displayWord;
+          span.appendChild(wText);
+
+          const thisIdx = globalIdx;
+          span.addEventListener("click", (e) => {
+            e.stopPropagation();
+            onWordClicked(thisIdx);
+          });
+
+          pBlock.appendChild(span);
+
+          wordsList.push({
+            index: thisIdx,
+            raw: displayWord,
+            clean,
+            skeleton,
+            phonetic,
+            el: span
+          });
+
+          globalIdx++;
+        });
+
+        prompterScroll.appendChild(pBlock);
+      });
+
+      updateActiveWordUI(true);
+    }
+
+    function updateActiveWordUI(instantScroll = false) {
+      if (!wordsList.length) return;
+      currentIndex = Math.max(0, Math.min(currentIndex, wordsList.length - 1));
+
+      const lookahead = getLookaheadWindowSize();
+
+      wordsList.forEach((w, idx) => {
+        w.el.classList.remove("read", "current", "next-window");
+        if (idx < currentIndex) {
+          w.el.classList.add("read");
+        } else if (idx === currentIndex) {
+          w.el.classList.add("current");
+        } else if (idx <= currentIndex + lookahead) {
+          w.el.classList.add("next-window");
+        }
+      });
+
+      const pct = Math.round((currentIndex / Math.max(1, wordsList.length - 1)) * 100);
+      progressCounter.textContent = `${pct}% (${currentIndex + 1}/${wordsList.length})`;
+
+      scrollToActiveWord(instantScroll);
+    }
+
+    function scrollToActiveWord(instant = false) {
+      const activeObj = wordsList[currentIndex];
+      if (!activeObj || !activeObj.el) return;
+
+      const containerHeight = prompterScroll.clientHeight;
+      // Position active word right inside the Eye-Level Guide (~24% from top)
+      const targetOffset = activeObj.el.offsetTop - containerHeight * 0.24;
+
+      prompterScroll.scrollTo({
+        top: Math.max(0, targetOffset),
+        behavior: instant ? "auto" : "smooth"
+      });
+    }
+
+    /********************************************************************
+     * 5. SPEECH RECOGNITION ENGINE (TOLERANT TO BR ACCENT)
+     ********************************************************************/
+    function getLookaheadWindowSize() {
+      const tol = selectTolerance.value;
+      if (tol === "high") return 14;   // Can skip several mispronounced words and lock onto the next clear word
+      if (tol === "medium") return 9;
+      return 5;
+    }
+
+    function getMatchThreshold() {
+      const tol = selectTolerance.value;
+      if (tol === "high") return 0.56; // Very forgiving phonetic match
+      if (tol === "medium") return 0.68;
+      return 0.80;
+    }
+
+    function initSpeechRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        heardTranscript.textContent = "⚠️ Seu navegador não suporta Web Speech API (use o Google Chrome no Android). Usando Rolagem Automática.";
+        selectMode.value = "auto";
+        return null;
+      }
+
+      const rec = new SpeechRec();
+      rec.lang = "en-US";
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 4;
+
+      rec.onstart = () => {
+        if (isRunning) {
+          statusPill.className = isRecording ? "status-pill recording" : "status-pill listening";
+          statusText.textContent = isRecording ? "Gravando + Ouvindo" : "Ouvindo você...";
+        }
+      };
+
+      rec.onresult = (event) => {
+        if (!isRunning || selectMode.value === "auto") return;
+
+        // Collect recent words across alternatives for maximum tolerance
+        let latestTranscript = "";
+        const spokenCandidates = [];
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const res = event.results[i];
+          latestTranscript += res[0].transcript + " ";
+
+          // Extract last 5 words from each alternative hypothesis
+          for (let alt = 0; alt < res.length; alt++) {
+            const altWords = res[alt].transcript
+              .trim()
+              .toLowerCase()
+              .split(/\s+/)
+              .slice(-6);
+            spokenCandidates.push(...altWords);
+          }
+        }
+
+        if (latestTranscript.trim()) {
+          heardTranscript.textContent = `🎙️ "${latestTranscript.trim().slice(-65)}"`;
+        }
+
+        processSpokenWords(spokenCandidates);
+      };
+
+      rec.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          heardTranscript.textContent = "⚠️ Permissão de microfone negada ou exige HTTPS/localhost. Rolagem automática ativa.";
+        }
+      };
+
+      rec.onend = () => {
+        // Android Chrome stops recognition periodically; auto-restart seamlessly if still running
+        if (isRunning && selectMode.value !== "auto") {
+          try {
+            rec.start();
+          } catch (_) {}
+        }
+      };
+
+      return rec;
+    }
+
+    /**
+     * Matches recent spoken words against the lookahead window in the script.
+     * Supports jumping over words that the user mispronounced or skipped!
+     */
+    function processSpokenWords(spokenWords) {
+      if (!spokenWords.length || currentIndex >= wordsList.length) return;
+
+      const lookahead = getLookaheadWindowSize();
+      const threshold = getMatchThreshold();
+      const maxSearchIndex = Math.min(wordsList.length - 1, currentIndex + lookahead);
+
+      let bestTargetIdx = -1;
+      let bestCombinedScore = 0;
+
+      // Evaluate recent spoken words (most recent last)
+      const recentSpoken = spokenWords.slice(-8);
+
+      for (let sIdx = 0; sIdx < recentSpoken.length; sIdx++) {
+        const spokenWord = recentSpoken[sIdx];
+        const prevSpoken = sIdx > 0 ? recentSpoken[sIdx - 1] : null;
+
+        for (let wIdx = currentIndex; wIdx <= maxSearchIndex; wIdx++) {
+          const targetObj = wordsList[wIdx];
+          const distancePenalty = (wIdx - currentIndex) * 0.022; // Prefer closer words slightly
+          let score = wordSimilarity(spokenWord, targetObj) - distancePenalty;
+
+          // Bonus if 2 consecutive words match (N-gram anchor for confident jump ahead)
+          if (prevSpoken && wIdx > currentIndex) {
+            const prevSim = wordSimilarity(prevSpoken, wordsList[wIdx - 1]);
+            if (prevSim >= 0.6) {
+              score += 0.25;
+            }
+          }
+
+          // For long Jumps (> 5 words ahead), require either a longer word (>=4 chars) or 2-word match
+          const jumpDist = wIdx - currentIndex;
+          if (jumpDist > 4 && targetObj.clean.length < 4 && score < 0.95) {
+            continue;
+          }
+
+          if (score >= threshold && score > bestCombinedScore) {
+            bestCombinedScore = score;
+            bestTargetIdx = wIdx;
+          }
+        }
+      }
+
+      if (bestTargetIdx >= currentIndex) {
+        // Advance to the word right after the one just spoken (or onto it if it's a jump)
+        const nextPos = bestTargetIdx === currentIndex
+          ? currentIndex + 1
+          : bestTargetIdx + 1;
+
+        currentIndex = Math.min(wordsList.length - 1, nextPos);
+        lastVoiceAdvanceTime = Date.now();
+        updateActiveWordUI(false);
+      }
+    }
+
+    /********************************************************************
+     * 6. HYBRID / AUTO-SCROLL LOOP
+     ********************************************************************/
+    function startAutoScrollLoop() {
+      stopAutoScrollLoop();
+      autoScrollTimer = setInterval(() => {
+        if (!isRunning) return;
+        const mode = selectMode.value;
+        const speedVal = parseFloat(rangeSpeed.value); // 0 to 8
+
+        if (mode === "voice" || speedVal <= 0) return;
+
+        // In hybrid mode, if voice recently advanced the cursor (< 2.4s ago), let voice lead!
+        // If the speaker paused or mic missed a word for > 2.4s, gently advance word-by-word
+        const timeSinceVoice = Date.now() - lastVoiceAdvanceTime;
+        const waitMs = Math.max(450, 2600 - speedVal * 260);
+
+        if (mode === "auto" || (mode === "hybrid" && timeSinceVoice > waitMs)) {
+          if (currentIndex < wordsList.length - 1) {
+            currentIndex++;
+            lastVoiceAdvanceTime = Date.now();
+            updateActiveWordUI(false);
+          } else {
+            stopPresentation();
+          }
+        }
+      }, 350);
+    }
+
+    function stopAutoScrollLoop() {
+      if (autoScrollTimer) {
+        clearInterval(autoScrollTimer);
+        autoScrollTimer = null;
+      }
+    }
+
+    /********************************************************************
+     * 7. PRESENTATION START / STOP & WORD POPOVER (TTS PRONUNCIATION)
+     ********************************************************************/
+    function startPresentation() {
+      isRunning = true;
+      wordPopover.classList.remove("show");
+      lastVoiceAdvanceTime = Date.now();
+
+      btnStartStop.innerHTML = "⏸️ Pausar";
+      btnStartStop.classList.remove("success");
+      btnStartStop.classList.add("danger");
+
+      if (selectMode.value !== "auto") {
+        if (!recognition) recognition = initSpeechRecognition();
+        if (recognition) {
+          try {
+            recognition.start();
+          } catch (_) {}
+        }
+      } else {
+        statusPill.className = "status-pill listening";
+        statusText.textContent = "Rolando...";
+      }
+
+      startAutoScrollLoop();
+    }
+
+    function stopPresentation() {
+      isRunning = false;
+      stopAutoScrollLoop();
+
+      if (recognition) {
+        try {
+          recognition.stop();
+        } catch (_) {}
+      }
+
+      btnStartStop.innerHTML = "▶️ Continuar";
+      btnStartStop.classList.remove("danger");
+      btnStartStop.classList.add("success");
+
+      statusPill.className = isRecording ? "status-pill recording" : "status-pill";
+      statusText.textContent = isRecording ? "Gravando (Pausado)" : "Pausado";
+    }
+
+    function onWordClicked(idx) {
+      const wObj = wordsList[idx];
+      if (!wObj) return;
+
+      // If presentation is running, tapping a word immediately jumps the active cursor there
+      if (isRunning) {
+        currentIndex = idx;
+        lastVoiceAdvanceTime = Date.now();
+        updateActiveWordUI(false);
+        return;
+      }
+
+      // If paused, set cursor there AND open the Pronunciation Coach Popover
+      currentIndex = idx;
+      selectedWordIdx = idx;
+      updateActiveWordUI(false);
+
+      popWordLabel.textContent = wObj.raw;
+      wordPopover.classList.add("show");
+      speakWord(wObj.raw, 0.95);
+    }
+
+    function speakWord(text, rate = 1.0) {
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const cleanText = text.replace(/[^a-zA-Z0-9'-]/g, "");
+      const utter = new SpeechSynthesisUtterance(cleanText);
+      utter.lang = "en-US";
+      utter.rate = rate;
+      window.speechSynthesis.speak(utter);
+    }
+
+    /********************************************************************
+     * 8. CAMERA SELFIE PREVIEW & INTEGRATED VIDEO/AUDIO RECORDING
+     ********************************************************************/
+    async function ensureMediaStream() {
+      if (mediaStream) return mediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: true
+        });
+        cameraVideo.srcObject = mediaStream;
+        return mediaStream;
+      } catch (err) {
+        // Fallback to audio-only if camera fails
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          return mediaStream;
+        } catch (audioErr) {
+          alert("Não foi possível acessar a câmera/microfone. Verifique as permissões do navegador (em Android requer HTTPS ou localhost).");
+          return null;
+        }
+      }
+    }
+
+    async function toggleCameraMode() {
+      cameraMode = (cameraMode + 1) % 3;
+      if (cameraMode === 0) {
+        cameraVideo.style.display = "none";
+        cameraVideo.classList.remove("bg-mode");
+        btnCamera.classList.remove("active-toggle");
+        if (!isRecording && mediaStream) {
+          mediaStream.getTracks().forEach((t) => t.stop());
+          mediaStream = null;
+        }
+      } else if (cameraMode === 1) {
+        const stream = await ensureMediaStream();
+        if (!stream) {
+          cameraMode = 0;
+          return;
+        }
+        cameraVideo.style.display = "block";
+        cameraVideo.classList.remove("bg-mode");
+        btnCamera.classList.add("active-toggle");
+        heardTranscript.textContent = "📷 Câmera no canto superior (toque em 📷 novamente para fundo transparente)";
+      } else if (cameraMode === 2) {
+        cameraVideo.style.display = "block";
+        cameraVideo.classList.add("bg-mode");
+        btnCamera.classList.add("active-toggle");
+        heardTranscript.textContent = "📷 Câmera como fundo transparente (olhe direto para a lente enquanto lê!)";
+      }
+    }
+
+    async function toggleRecording() {
+      if (isRecording) {
+        // Stop recording
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        }
+        isRecording = false;
+        btnRecord.classList.remove("danger");
+        btnRecord.textContent = "🔴";
+        statusPill.className = isRunning ? "status-pill listening" : "status-pill";
+        statusText.textContent = isRunning ? "Ouvindo você..." : "Pronto";
+        return;
+      }
+
+      const stream = await ensureMediaStream();
+      if (!stream) return;
+
+      recordedChunks = [];
+      const mimeTypes = [
+        "video/webm;codecs=vp8,opus",
+        "video/webm",
+        "video/mp4",
+        "audio/webm"
+      ];
+      const supportedMime = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+
+      try {
+        mediaRecorder = supportedMime
+          ? new MediaRecorder(stream, { mimeType: supportedMime })
+          : new MediaRecorder(stream);
+      } catch (e) {
+        alert("Erro ao iniciar gravação neste navegador.");
+        return;
+      }
+
+      mediaRecorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const ext = (mediaRecorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
+        downloadLink.href = url;
+        downloadLink.download = `apresentacao-ingles-${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.${ext}`;
+        downloadBanner.classList.add("show");
+      };
+
+      mediaRecorder.start(1000);
+      isRecording = true;
+      btnRecord.classList.add("danger");
+      btnRecord.textContent = "⏹️";
+      statusPill.className = "status-pill recording";
+      statusText.textContent = "Gravando...";
+
+      if (cameraMode === 0) {
+        toggleCameraMode();
+      }
+      if (!isRunning) {
+        startPresentation();
+      }
+    }
+
+    /********************************************************************
+     * 9. EVENT LISTENERS & INITIALIZATION
+     ********************************************************************/
+    btnStartStop.addEventListener("click", () => {
+      if (isRunning) stopPresentation();
+      else startPresentation();
+    });
+
+    btnReset.addEventListener("click", () => {
+      stopPresentation();
+      currentIndex = 0;
+      btnStartStop.innerHTML = "▶️ Iniciar Apresentação";
+      updateActiveWordUI(true);
+    });
+
+    btnPrev.addEventListener("click", () => {
+      currentIndex = Math.max(0, currentIndex - 6);
+      lastVoiceAdvanceTime = Date.now();
+      updateActiveWordUI(false);
+    });
+
+    btnNext.addEventListener("click", () => {
+      currentIndex = Math.min(wordsList.length - 1, currentIndex + 6);
+      lastVoiceAdvanceTime = Date.now();
+      updateActiveWordUI(false);
+    });
+
+    btnPhonetics.addEventListener("click", () => {
+      showPhonetics = !showPhonetics;
+      prompterScroll.classList.toggle("hide-phonetics", !showPhonetics);
+      btnPhonetics.classList.toggle("active-toggle", showPhonetics);
+    });
+
+    btnMirror.addEventListener("click", () => {
+      mirrorState = (mirrorState + 1) % 4;
+      prompterScroll.classList.remove("mirror-h", "mirror-v", "mirror-hv");
+      btnMirror.classList.toggle("active-toggle", mirrorState !== 0);
+      if (mirrorState === 1) {
+        prompterScroll.classList.add("mirror-h");
+        heardTranscript.textContent = "🪞 Modo Espelho Horizontal ativado";
+      } else if (mirrorState === 2) {
+        prompterScroll.classList.add("mirror-v");
+        heardTranscript.textContent = "🪞 Modo Espelho Vertical ativado";
+      } else if (mirrorState === 3) {
+        prompterScroll.classList.add("mirror-hv");
+        heardTranscript.textContent = "🪞 Modo Espelho H+V ativado";
+      } else {
+        heardTranscript.textContent = "🪞 Modo Espelho desativado";
+      }
+    });
+
+    btnCamera.addEventListener("click", toggleCameraMode);
+    btnRecord.addEventListener("click", toggleRecording);
+
+    btnCloseBanner.addEventListener("click", () => {
+      downloadBanner.classList.remove("show");
+    });
+
+    rangeSpeed.addEventListener("input", () => {
+      lblSpeed.textContent = `${ parseFloat(rangeSpeed.value).toFixed(1) }x`;
+    });
+
+    rangeFont.addEventListener("input", () => {
+      const sz = rangeFont.value;
+      lblFont.textContent = `${sz}px`;
+      document.documentElement.style.setProperty("--font-size", `${sz}px`);
+      scrollToActiveWord(true);
+    });
+
+    // Editor Modal
+    btnEdit.addEventListener("click", () => {
+      stopPresentation();
+      scriptInput.value = localStorage.getItem("pf_saved_script") || DEFAULT_SCRIPT;
+      editorModal.classList.add("open");
+    });
+
+    btnCloseModal.addEventListener("click", () => {
+      editorModal.classList.remove("open");
+    });
+
+    btnLoadSample.addEventListener("click", () => {
+      scriptInput.value = DEFAULT_SCRIPT;
+    });
+
+    btnSaveScript.addEventListener("click", () => {
+      const val = scriptInput.value.trim() || DEFAULT_SCRIPT;
+      localStorage.setItem("pf_saved_script", val);
+      parseAndRenderScript(val);
+      editorModal.classList.remove("open");
+    });
+
+    // Word Coach Popover Actions
+    btnSpeakNormal.addEventListener("click", () => {
+      if (selectedWordIdx !== null && wordsList[selectedWordIdx]) {
+        speakWord(wordsList[selectedWordIdx].raw, 0.95);
+      }
+    });
+
+    btnSpeakSlow.addEventListener("click", () => {
+      if (selectedWordIdx !== null && wordsList[selectedWordIdx]) {
+        speakWord(wordsList[selectedWordIdx].raw, 0.55);
+      }
+    });
+
+    btnCustomPhonetic.addEventListener("click", () => {
+      if (selectedWordIdx === null || !wordsList[selectedWordIdx]) return;
+      const wObj = wordsList[selectedWordIdx];
+      const currentHint = wObj.phonetic || "";
+      const newHint = prompt(
+        `Como você prefere ler a pronúncia de "${wObj.raw}"?\n(Deixe vazio para remover)`,
+        currentHint
+      );
+      if (newHint !== null) {
+        customPhonetics[wObj.clean] = newHint.trim();
+        localStorage.setItem("pf_custom_phonetics", JSON.stringify(customPhonetics));
+        const currentScript = localStorage.getItem("pf_saved_script") || DEFAULT_SCRIPT;
+        const savedIdx = currentIndex;
+        parseAndRenderScript(currentScript);
+        currentIndex = savedIdx;
+        updateActiveWordUI(true);
+      }
+    });
+
+    btnJumpHere.addEventListener("click", () => {
+      if (selectedWordIdx !== null) {
+        currentIndex = selectedWordIdx;
+        wordPopover.classList.remove("show");
+        startPresentation();
+      }
+    });
+
+    btnClosePop.addEventListener("click", () => {
+      wordPopover.classList.remove("show");
+    });
+
+    // Keep screen awake on Android using Wake Lock API
+    async function requestWakeLock() {
+      if ("wakeLock" in navigator) {
+        try {
+          await navigator.wakeLock.request("screen");
+        } catch (_) {}
+      }
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") requestWakeLock();
+    });
+
+    // Initialize App on Load
+    window.addEventListener("DOMContentLoaded", () => {
+      const initialScript = localStorage.getItem("pf_saved_script") || DEFAULT_SCRIPT;
+      parseAndRenderScript(initialScript);
+      requestWakeLock();
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>
